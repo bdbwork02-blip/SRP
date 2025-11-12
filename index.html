@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Smart Release Planner — MVP (Static)</title>
+  <title>Smart Release Planner — MVP (Static, Rich Tips)</title>
   <style>
     :root { color-scheme: dark; }
     body { margin:0; background:#0f172a; color:#e5e7eb; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
@@ -26,6 +26,7 @@
     .title { font-weight:700; }
     .spacer { height:12px; }
     .hidden { display:none; }
+    .tips { margin-top:6px; white-space:pre-wrap; line-height:1.35; }
   </style>
 </head>
 <body>
@@ -87,11 +88,7 @@
       <div class="spacer"></div>
       <div id="eventsGrid" class="grid"></div>
 
-      <div class="spacer"></div>
-      <div class="card">
-        <div class="title">🧠 Промпт за OpenAI (Pro интеграция)</div>
-        <textarea id="promptOut" readonly style="margin-top:8px"></textarea>
-      </div>
+      <!-- Премахнато: Промпт за OpenAI (по желание може да се включи отново) -->
     </div>
 
     <p class="muted" style="margin-top:10px">MVP демо: локална евристика без външни API. За финал включи OpenAI + Spotify API през Make/Bubble.</p>
@@ -136,20 +133,73 @@
       return { dt: atTime(from,18,0), reason:"Липсват предпочитани дни → избран е първият ден 18:00." };
     }
 
+    // ===== Rich Tips Generator =====
+    function cap(text){ return text; }
+    function tipTeaser(genre){
+      return cap(
+`Видео 10–15 сек с най-силния hook. Кадър 1: close-up/липсинг; Кадър 2: бърз cut към рефрена. 
+Капшън шаблон: "⚡ Първи поглед към [име на песента] — ако ти хареса, остави ❤️ и пиши коя редица да пусна утре". 
+Хаштагове: #[жанр] #[mood] #[countrymusic] + 3 персонални. CTA: "Запази звука"/"Последвай за премиерата".`);
+    }
+    function tipPresave(){
+      return cap(
+`Пост + сторита с линк за pre-save (Spotify/Apple). Пинни поста 48ч. 
+Стории: стикери "Countdown" и "Question" ("Коя е любимата ти реплика от тийзъра?"). 
+Капшън шаблон: "🎯 Помогни на трака да влезе в алгоритъма — pre-save с 1 клик".`);
+    }
+    function tipBTS(){
+      return cap(
+`Behind-the-scenes карусел/Shorts: 3–5 кадъра от запис/микс/видео сет. 
+Сценарий: 1) проблем → 2) решение → 3) емоция. 
+Капшън: "Как направихме [hook/синт] — swipe до края за fail кадър". Добави Poll: "Искаш ли акустична версия?"`);
+    }
+    function tipCountdown(){
+      return cap(
+`24h до премиерата. Използвай "Reminder" в YouTube Premiere/IG Story. 
+Капшън: "⏳ Утре в [час]: премиера на [име] — настрои напомняне и ми кажи от къде слушаш". Коментар-примамка: "Кой ред да стане hook в TikTok?"`);
+    }
+    function tipRelease(){
+      return cap(
+`Публикувай линкове + Premiere в YouTube. 
+Закрепи 1-ви коментар: "Коя ти е любимата секунда? Остави таймкод". 
+Промени линка в био → към smart link. 
+Опрости YouTube описанието: ключови думи, ISRC, кредити, контакт за букинг.`);
+    }
+    function tipLive(){
+      return cap(
+`TikTok/IG Live 20–30 мин. Скрипт: 1) история на песента (2 мин) → 2) първо слушане (hook) → 3) Q&A → 4) изпълнение на акустичен откъс. 
+CTA: "Запази в плейлист" / "Прати на приятел".`);
+    }
+    function tipPerf(){
+      return cap(
+`Reels/TikTok 20–30 сек (само hook). Включи надписи (captions), текст върху видео (ключова фраза), и 1 преход. 
+Капшън: "ако това влезе в главата ти — запази трака". Стартирай мини-чалъндж с хаштаг #[имеНаПесента]Challenge.`);
+    }
+    function tipCollab(){
+      return cap(
+`Колаборация с микроинфлуенсър (5–50k). Дай им 3 идеи за дует (танц, реакция, вокална хармония). 
+Шаблон за DM: "Здрасти [име]! Имам нов трак [жанр], hook на 0:12. Ще ти пратя clean snippet за дует. Искаш ли early access?"`);
+    }
+    function tipDJ(){
+      return cap(
+`Изпрати DJ promo pack: ZIP (Radio Edit + Club Edit + Instrumental + Cover 3000x3000 + One-sheet PDF). 
+Имейл тема: "PROMO: [Арт. – Трак] (320kbps) — early support". Добави линк към Dropbox/Drive и контакт за букинг.`);
+    }
+
+    // ===== План + експорт =====
     function makePlan(releaseDate, genre){
-      const events=[], rd=releaseDate;
+      const events=[], rd=releaseDate; const g=(genre||"").toLowerCase();
       const minus=(d,h=10)=>{ const x=addDays(rd,-d); x.setHours(h,0,0,0); return x; };
       const plus =(d,h=11)=>{ const x=addDays(rd, d); x.setHours(h,0,0,0); return x; };
-      const g=(genre||"").toLowerCase();
-      events.push({when:minus(7,19), title:"Teaser видео (15 сек)", channel:"TikTok/IG Reels", tip:"Жанрови хаштагове + hook"});
-      events.push({when:minus(5,12), title:"Pre-save кампания", channel:"Link in bio", tip:"CTA в сторита + pin пост"});
-      events.push({when:minus(3,19), title:"Behind-the-scenes", channel:"Stories + YouTube Shorts", tip:"Покажи процеса"});
-      events.push({when:minus(1,18), title:"Кауънтдаун пост", channel:"IG/TikTok", tip:"Напомняне за часа"});
-      events.push({when:rd,         title:"RELEASE", channel:"Spotify/YouTube", tip:"Премиера в точния час"});
-      events.push({when:plus(1,12),  title:"Live Q&A", channel:"TikTok Live", tip:"Покани въпроси"});
-      events.push({when:plus(3,18),  title:"Performance clip", channel:"IG Reels", tip:"30 сек hook"});
-      events.push({when:plus(7,18),  title:"Collab пост", channel:"Микроинфлуенсър", tip:"Duet/Collab"});
-      if(["edm","trap"].includes(g)) events.push({when:plus(10,20), title:"DJ promo pack", channel:"Dropbox/Promo mail", tip:"Радио/клуб edit + coverart"});
+      events.push({when:minus(7,19), title:"Teaser видео (15 сек)", channel:"TikTok/IG Reels", tip: tipTeaser(g)});
+      events.push({when:minus(5,12), title:"Pre-save кампания", channel:"Link in bio", tip: tipPresave()});
+      events.push({when:minus(3,19), title:"Behind-the-scenes", channel:"Stories + YouTube Shorts", tip: tipBTS()});
+      events.push({when:minus(1,18), title:"Кауънтдаун пост", channel:"IG/TikTok", tip: tipCountdown()});
+      events.push({when:rd,         title:"RELEASE", channel:"Spotify/YouTube", tip: tipRelease()});
+      events.push({when:plus(1,12),  title:"Live Q&A", channel:"TikTok Live", tip: tipLive()});
+      events.push({when:plus(3,18),  title:"Performance clip", channel:"IG Reels", tip: tipPerf()});
+      events.push({when:plus(7,18),  title:"Collab пост", channel:"Микроинфлуенсър", tip: tipCollab()});
+      if(["edm","trap"].includes(g)) events.push({when:plus(10,20), title:"DJ promo pack", channel:"Dropbox/Promo mail", tip: tipDJ()});
       return events.sort((a,b)=> a.when-b.when);
     }
 
@@ -195,7 +245,6 @@
     const windowInfo = $("windowInfo");
     const bestDays = $("bestDays");
     const eventsGrid = $("eventsGrid");
-    const promptOut = $("promptOut");
 
     function setDefaults(){
       const s = addDays(new Date(),7).toISOString().slice(0,10);
@@ -239,15 +288,12 @@
           <div class="muted">${fmtBG(ev.when)}</div>
           <div class="title" style="margin-top:6px">${ev.title}</div>
           <div class="muted" style="margin-top:4px"><b>Канал:</b> ${ev.channel}</div>
-          <div class="muted" style="margin-top:2px"><b>Съвет:</b> ${ev.tip}</div>
+          <div class="tips"><b>Идеи:</b> ${ev.tip}</div>
         `;
         eventsGrid.appendChild(div);
       });
 
-      // Prompt preview
-      promptOut.value = `You are an AI music marketing strategist. Analyze engagement around this song and return JSON with recommended release date (Europe/Sofia timezone), best days to post, and plans for pre-launch, launch-day, and post-launch.\n\nSong URL: ${url || "(add URL)"}\nGenre: ${genre || "(genre)"}\nFollowers: ${followers || "(0)"}\n\nConstraints:\n- Prefer Tue/Thu/Fri; avoid weekend where appropriate.\n- Ensure ~7 days pre-launch runway.\n- Chosen window: ${winStart} → ${winEnd}.\n- Provide rationale in one sentence.\n\nOutput JSON:\n{\n  \"recommended_date\": \"YYYY-MM-DD HH:MM\",\n  \"best_days_to_post\": [\"Tuesday\",\"Thursday\"],\n  \"pre_launch_plan\": \"...\",\n  \"launch_day_actions\": \"...\",\n  \"post_launch_plan\": \"...\",\n  \"rationale\": \"...\" \n}`;
-
-      // Export buttons wire-up
+      // Export buttons
       $("csvBtn").onclick = ()=> download("release_plan.csv", toCSV(plan));
       $("icsBtn").onclick = ()=> download("release_plan.ics", icsForEvents(plan, "Smart Release Planner"));
 
@@ -256,18 +302,6 @@
 
     $("genBtn").addEventListener("click", handleGenerate);
     setDefaults();
-
-    // Smoke tests to ensure no white screen
-    (function runTests(){
-      const csv=toCSV([{when:new Date("2025-01-02T18:00:00Z"), title:'He said "Hi"', channel:"X", tip:"Y"}]);
-      console.assert(csv.includes("\n"), "CSV newline ok");
-      console.assert(csv.includes('\\"'), "CSV quotes escaped");
-      const ics=icsForEvents([{when:new Date("2025-01-02T18:00:00Z"), title:"A", channel:"B", tip:"C"}]);
-      console.assert(ics.includes("BEGIN:VCALENDAR") && ics.includes("END:VCALENDAR"), "ICS envelope ok");
-      const days=(function(a,b){const s=new Date(a),e=new Date(b);s.setHours(0,0,0,0);e.setHours(0,0,0,0);let c=0;for(let d=new Date(s);d<=e;d.setDate(d.getDate()+1))c++;return c;})("2025-01-01","2025-01-03");
-      console.assert(days===3, "enumerate includes ends");
-    })();
   </script>
 </body>
 </html>
-
