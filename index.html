@@ -90,8 +90,6 @@
       <div class="spacer"></div>
       <div id="eventsGrid" class="grid"></div>
     </div>
-
-    <p class="muted" style="margin-top:10px">MVP демо: локална евристика без външни API. За финал включи OpenAI + Spotify API през Make/Bubble.</p>
   </div>
 
   <script>
@@ -166,12 +164,11 @@
       const rows=events.map(e=>`<tr><td>${esc(new Date(e.when).toLocaleString('bg-BG'))}</td><td>${esc(e.title)}</td><td>${esc(e.channel)}</td><td>${esc(e.tip)}</td></tr>`).join("");
       return `<!doctype html><html><head><meta charset='utf-8'><title>Release Plan PDF</title>
       <style>body{font:14px/1.45 system-ui,Segoe UI,Roboto,sans-serif;color:#111;margin:32px;} h1{margin:0 0 6px;} .muted{color:#555} table{width:100%;border-collapse:collapse;margin-top:16px} th,td{border:1px solid #ddd;padding:8px;vertical-align:top} th{background:#f3f4f6;text-align:left} .head{margin-top:12px} .small{font-size:12px;color:#444}</style>
-      </head><body>
+      </head><body onload="window.print(); setTimeout(function(){ window.close(); }, 300);">
       <h1>Smart Release Planner — План</h1>
       <div class='muted'>Жанр: ${esc(meta.genre||'-')} · Период: ${esc(meta.winStart)} → ${esc(meta.winEnd)}</div>
       <div class='head'><b>Препоръчана дата:</b> ${esc(meta.recDate)}<br><span class='small'>Причина: ${esc(meta.reason)}</span></div>
       <table><thead><tr><th>Дата/Час</th><th>Дейност</th><th>Канал</th><th>Идеи/Съвети</th></tr></thead><tbody>${rows}</tbody></table>
-      <script>window.onload=()=>{window.print();setTimeout(()=>window.close(),300);};</script>
       </body></html>`;
     }
 
