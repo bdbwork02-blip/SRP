@@ -1,1 +1,77 @@
+<!DOCTYPE html>
+<html lang="bg">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Smart Release Planner</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+    <style>
+      body {
+        background-color: #0f172a;
+        color: white;
+        font-family: system-ui, sans-serif;
+        margin: 0;
+        padding: 20px;
+      }
+      input, textarea, button {
+        border-radius: 8px;
+        border: 1px solid #334155;
+        background: #1e293b;
+        color: white;
+        padding: 6px 8px;
+        width: 100%;
+      }
+      button {
+        background-color: #38bdf8;
+        color: black;
+        font-weight: bold;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      function App() {
+        const [genre, setGenre] = React.useState("");
+        const [date, setDate] = React.useState("");
+        const [plan, setPlan] = React.useState(null);
+
+        const generatePlan = () => {
+          setPlan({
+            date: date || "2025-11-21",
+            message: `Жанр: ${genre || "Pop"} — Препоръчана дата: ${date || "Петък, 21 ноември"}`
+          });
+        };
+
+        return (
+          <div>
+            <h1>🎵 Smart Release Planner</h1>
+            <p>AI асистент за независими музиканти</p>
+
+            <label>Жанр:</label>
+            <input value={genre} onChange={(e) => setGenre(e.target.value)} placeholder="Pop, EDM, Indie..." />
+
+            <label>Дата на релийз:</label>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+
+            <button onClick={generatePlan}>Генерирай план</button>
+
+            {plan && (
+              <div style={{marginTop:"20px", padding:"10px", border:"1px solid #334155", borderRadius:"8px"}}>
+                <h3>📅 Резултат:</h3>
+                <p>{plan.message}</p>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>
 
