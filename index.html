@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Smart Release Planner — MVP (Upload + Full Plan)</title>
+  <title>Smart Release Planner — MVP (Upload + Full Plan + PDF)</title>
   <style>
     :root { color-scheme: dark; }
     body { margin:0; background:#0f172a; color:#e5e7eb; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
@@ -27,7 +27,7 @@
     .spacer { height:12px; }
     .hidden { display:none; }
     .tips { margin-top:6px; white-space:pre-wrap; line-height:1.35; }
-    .actions { display:flex; gap:8px; align-items:end; }
+    .actions { display:flex; gap:8px; align-items:end; flex-wrap:wrap; }
   </style>
 </head>
 <body>
@@ -82,6 +82,7 @@
           <div class="actions">
             <button class="secondary" id="csvBtn">Експорт CSV</button>
             <button class="secondary" id="icsBtn">Експорт ICS</button>
+            <button class="secondary" id="pdfBtn">Експорт PDF</button>
           </div>
         </div>
       </div>
@@ -159,11 +160,28 @@
     }
     function download(filename, text){ const blob=new Blob([text],{type:"text/plain;charset=utf-8"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=filename; a.click(); setTimeout(()=>URL.revokeObjectURL(url),800); }
 
+    // ===== PDF (print-friendly) =====
+    function buildPrintableHTML(meta, events){
+      const esc=(s)=>String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+      const rows=events.map(e=>`<tr><td>${esc(new Date(e.when).toLocaleString('bg-BG'))}</td><td>${esc(e.title)}</td><td>${esc(e.channel)}</td><td>${esc(e.tip)}</td></tr>`).join("");
+      return `<!doctype html><html><head><meta charset='utf-8'><title>Release Plan PDF</title>
+      <style>body{font:14px/1.45 system-ui,Segoe UI,Roboto,sans-serif;color:#111;margin:32px;} h1{margin:0 0 6px;} .muted{color:#555} table{width:100%;border-collapse:collapse;margin-top:16px} th,td{border:1px solid #ddd;padding:8px;vertical-align:top} th{background:#f3f4f6;text-align:left} .head{margin-top:12px} .small{font-size:12px;color:#444}</style>
+      </head><body>
+      <h1>Smart Release Planner — План</h1>
+      <div class='muted'>Жанр: ${esc(meta.genre||'-')} · Период: ${esc(meta.winStart)} → ${esc(meta.winEnd)}</div>
+      <div class='head'><b>Препоръчана дата:</b> ${esc(meta.recDate)}<br><span class='small'>Причина: ${esc(meta.reason)}</span></div>
+      <table><thead><tr><th>Дата/Час</th><th>Дейност</th><th>Канал</th><th>Идеи/Съвети</th></tr></thead><tbody>${rows}</tbody></table>
+      <script>window.onload=()=>{window.print();setTimeout(()=>window.close(),300);};</script>
+      </body></html>`;
+    }
+
     // ===== App wiring =====
     const $=(id)=>document.getElementById(id);
     const resultWrap=$("resultWrap"), recDate=$("recDate"), reason=$("reason"), windowInfo=$("windowInfo"), bestDays=$("bestDays"), eventsGrid=$("eventsGrid");
 
     function setDefaults(){ const s=addDays(new Date(),7).toISOString().slice(0,10); const e=addDays(new Date(),30).toISOString().slice(0,10); $("wstart").value=s; $("wend").value=e; }
+
+    let lastPlan=null, lastMeta=null;
 
     $("genBtn").addEventListener("click",()=>{
       if(!$("songFile").files.length){ alert("Моля, качи песен!"); return; }
@@ -175,6 +193,8 @@
       eventsGrid.innerHTML=""; plan.forEach(ev=>{ const div=document.createElement("div"); div.className="event"; div.innerHTML=`<div class='muted'>${fmtBG(ev.when)}</div><div class='title' style='margin-top:6px'>${ev.title}</div><div class='muted' style='margin-top:4px'><b>Канал:</b> ${ev.channel}</div><div class='tips'><b>Идеи:</b> ${ev.tip}</div>`; eventsGrid.appendChild(div); });
       $("csvBtn").onclick=()=>download("release_plan.csv", toCSV(plan));
       $("icsBtn").onclick=()=>download("release_plan.ics", icsForEvents(plan, "Smart Release Planner"));
+      $("pdfBtn").onclick=()=>{ const meta={genre, winStart, winEnd, recDate:recDate.textContent, reason:why}; const html=buildPrintableHTML(meta, plan); const w=window.open("about:blank","_blank"); w.document.open(); w.document.write(html); w.document.close(); };
+      lastPlan=plan; lastMeta={genre, winStart, winEnd, recDate:recDate.textContent, reason:why};
       resultWrap.classList.remove("hidden");
     });
 
