@@ -1,77 +1,265 @@
 <!DOCTYPE html>
 <html lang="bg">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Smart Release Planner</title>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
-    <style>
-      body {
-        background-color: #0f172a;
-        color: white;
-        font-family: system-ui, sans-serif;
-        margin: 0;
-        padding: 20px;
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Smart Release Planner — MVP</title>
+
+  <!-- React 18 UMD + Babel (за да работи JSX в един файл) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+
+  <style>
+    :root { color-scheme: dark; }
+    body { margin:0; background:#0f172a; color:#e5e7eb; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+    .container { max-width:1100px; margin:0 auto; padding:24px; }
+    h1 { margin:0 0 16px; display:flex; align-items:center; gap:10px; }
+    .card { background:#0b1220; border:1px solid #334155; border-radius:16px; padding:18px; }
+    .row { display:grid; grid-template-columns:1fr; gap:14px; }
+    @media (min-width: 900px){ .row{ grid-template-columns:1fr 1fr; } }
+    label { display:block; font-size:13px; color:#cbd5e1; margin-bottom:6px; }
+    input, textarea, button { width:100%; box-sizing:border-box; border-radius:10px; }
+    input, textarea { background:#0a0f1a; color:#e5e7eb; border:1px solid #334155; padding:10px 12px; }
+    textarea { min-height:90px; resize:vertical; }
+    button { background:#38bdf8; color:#0a0f1a; border:none; padding:10px 14px; font-weight:700; cursor:pointer; }
+    button.secondary { background:#111827; color:#e5e7eb; border:1px solid #334155; }
+    button:disabled { opacity:.6; cursor:not-allowed; }
+    .grid { display:grid; grid-template-columns:1fr; gap:14px; }
+    @media (min-width: 900px){ .grid{ grid-template-columns:1fr 1fr; } }
+    .event { background:#0a0f1a; border:1px solid #334155; border-radius:14px; padding:12px; }
+    .muted { color:#94a3b8; font-size:12px; }
+    .title { font-weight:700; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    // ===== Utilities =====
+    const sofiaTZ = "Europe/Sofia";
+    const fmtBG = (dt)=> new Intl.DateTimeFormat("bg-BG",{dateStyle:"full", timeStyle:"short", timeZone:sofiaTZ}).format(dt);
+    const addDays = (d, n)=>{ const x=new Date(d); x.setDate(x.getDate()+n); return x; };
+    const atTime = (d, h=18, m=0)=>{ const x=new Date(d); x.setHours(h,m,0,0); return x; };
+
+    // scoring по дни
+    function scoreDays(genre, followers){
+      const base={1:.6, 2:.8, 3:.7, 4:.95, 5:.85, 6:.4, 0:.5};
+      const boost={ pop:{2:.1,4:.15}, hiphop:{5:.15,6:-.1}, indie:{1:.05,2:.1,4:.1}, edm:{5:.15,6:.05}, rnb:{2:.08,4:.12}, rock:{4:.1,5:.08}, trap:{5:.12} };
+      const g=(genre||"").toLowerCase(); const b=boost[g]||{};
+      const size = followers>10000? .05 : followers>2000? .02 : 0;
+      const out={}; Object.entries(base).forEach(([k,v])=> out[k]=v+(b[k]||0)+size);
+      return out;
+    }
+    function enumerateDates(a,b){
+      const s=new Date(a), e=new Date(b); s.setHours(0,0,0,0); e.setHours(0,0,0,0);
+      const res=[]; for(let d=new Date(s); d<=e; d.setDate(d.getDate()+1)) res.push(new Date(d));
+      return res;
+    }
+    function pickBestDateInWindow({genre, followers, startDate, endDate, preferred=[
+      {dow:2, hour:18, minute:0}, // Tue
+      {dow:4, hour:18, minute:0}, // Thu
+      {dow:5, hour:12, minute:0}, // Fri noon
+    ]}){
+      const runway=7, today=new Date(), minAllowed=addDays(today, runway);
+      const defStart = addDays(today, runway), defEnd=addDays(today,30);
+      const wStart = startDate? new Date(startDate) : defStart;
+      const wEnd   = endDate?   new Date(endDate)   : defEnd;
+      const from = wStart<minAllowed ? minAllowed : wStart;
+      const to   = wEnd;
+      if(to<from) return { dt: atTime(from,18,0), reason:"Коригиран период → първи възможен ден след runway." };
+
+      const scores=scoreDays(genre, followers);
+      const candidates=[];
+      for(const d of enumerateDates(from,to)){
+        for(const p of preferred){
+          if(d.getDay()===p.dow){
+            candidates.push({ dt: atTime(d, p.hour, p.minute), score: scores[String(p.dow)] ?? .5 });
+          }
+        }
       }
-      input, textarea, button {
-        border-radius: 8px;
-        border: 1px solid #334155;
-        background: #1e293b;
-        color: white;
-        padding: 6px 8px;
-        width: 100%;
+      if(candidates.length){
+        candidates.sort((a,b)=> b.score-a.score);
+        return { dt: candidates[0].dt, reason:`Най-висок скоринг в прозореца (${(candidates[0].score*100).toFixed(0)}%)` };
       }
-      button {
-        background-color: #38bdf8;
-        color: black;
-        font-weight: bold;
-        cursor: pointer;
-      }
-    </style>
-  </head>
-  <body>
-    <div id="root"></div>
+      return { dt: atTime(from,18,0), reason:"Липсват предпочитани дни → избран е първият ден 18:00." };
+    }
 
-    <script type="text/babel">
-      function App() {
-        const [genre, setGenre] = React.useState("");
-        const [date, setDate] = React.useState("");
-        const [plan, setPlan] = React.useState(null);
-
-        const generatePlan = () => {
-          setPlan({
-            date: date || "2025-11-21",
-            message: `Жанр: ${genre || "Pop"} — Препоръчана дата: ${date || "Петък, 21 ноември"}`
-          });
-        };
-
-        return (
-          <div>
-            <h1>🎵 Smart Release Planner</h1>
-            <p>AI асистент за независими музиканти</p>
-
-            <label>Жанр:</label>
-            <input value={genre} onChange={(e) => setGenre(e.target.value)} placeholder="Pop, EDM, Indie..." />
-
-            <label>Дата на релийз:</label>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-
-            <button onClick={generatePlan}>Генерирай план</button>
-
-            {plan && (
-              <div style={{marginTop:"20px", padding:"10px", border:"1px solid #334155", borderRadius:"8px"}}>
-                <h3>📅 Резултат:</h3>
-                <p>{plan.message}</p>
-              </div>
-            )}
-          </div>
+    // план + експорт
+    function makePlan(releaseDate, genre){
+      const events=[], rd=releaseDate;
+      const minus=(d,h=10)=>{ const x=addDays(rd,-d); x.setHours(h,0,0,0); return x; };
+      const plus =(d,h=11)=>{ const x=addDays(rd, d); x.setHours(h,0,0,0); return x; };
+      const g=(genre||"").toLowerCase();
+      events.push({when:minus(7,19), title:"Teaser видео (15 сек)", channel:"TikTok/IG Reels", tip:"Жанрови хаштагове + hook"});
+      events.push({when:minus(5,12), title:"Pre-save кампания", channel:"Link in bio", tip:"CTA в сторита + pin пост"});
+      events.push({when:minus(3,19), title:"Behind-the-scenes", channel:"Stories + YouTube Shorts", tip:"Покажи процеса"});
+      events.push({when:minus(1,18), title:"Кауънтдаун пост", channel:"IG/TikTok", tip:"Напомняне за часа"});
+      events.push({when:rd,         title:"RELEASE", channel:"Spotify/YouTube", tip:"Премиера в точния час"});
+      events.push({when:plus(1,12),  title:"Live Q&A", channel:"TikTok Live", tip:"Покани въпроси"});
+      events.push({when:plus(3,18),  title:"Performance clip", channel:"IG Reels", tip:"30 сек hook"});
+      events.push({when:plus(7,18),  title:"Collab пост", channel:"Микроинфлуенсър", tip:"Duet/Collab"});
+      if(["edm","trap"].includes(g)) events.push({when:plus(10,20), title:"DJ promo pack", channel:"Dropbox/Promo mail", tip:"Радио/клуб edit + coverart"});
+      return events.sort((a,b)=> a.when-b.when);
+    }
+    function toCSV(events){
+      const header=["Дата","Дейност","Канал","Съвет"].join(",");
+      const rows = events.map(e=> [e.when.toISOString(), e.title, e.channel, e.tip]
+        .map(x=>`"${String(x).replaceAll('"','\\"')}"`).join(",")
+      );
+      return [header, ...rows].join("\n");
+    }
+    function icsForEvents(events, projectName="Smart Release Planner"){
+      const dtStamp=new Date();
+      const fmt=(d)=>`${d.getUTCFullYear()}${String(d.getUTCMonth()+1).padStart(2,"0")}${String(d.getUTCDate()).padStart(2,"0")}T${String(d.getUTCHours()).padStart(2,"0")}${String(d.getUTCMinutes()).padStart(2,"0")}${String(d.getUTCSeconds()).padStart(2,"0")}Z`;
+      const lines=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Smart Release Planner//BG"];
+      events.forEach((e,i)=>{
+        const start=new Date(e.when), end=new Date(start.getTime()+60*60*1000);
+        lines.push("BEGIN:VEVENT",
+          `UID:${i}-${dtStamp.getTime()}@smart-release`,
+          `DTSTAMP:${fmt(dtStamp)}`,
+          `DTSTART:${fmt(start)}`, `DTEND:${fmt(end)}`,
+          `SUMMARY:${e.title} — ${projectName}`,
+          `DESCRIPTION:${e.channel} | ${e.tip}`,
+          "END:VEVENT"
         );
-      }
+      });
+      lines.push("END:VCALENDAR");
+      return lines.join("\r\n");
+    }
+    function download(filename, text){
+      const blob=new Blob([text], {type:"text/plain;charset=utf-8"});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement("a"); a.href=url; a.download=filename; a.click();
+      setTimeout(()=>URL.revokeObjectURL(url), 800);
+    }
 
-      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
-    </script>
-  </body>
+    // минимални smoke-тестове
+    function runTests(){
+      const csv=toCSV([{when:new Date("2025-01-02T18:00:00Z"), title:'He said "Hi"', channel:"X", tip:"Y"}]);
+      console.assert(csv.includes("\n"), "CSV: newline");
+      console.assert(csv.includes('\\"'), "CSV: quotes escaped");
+
+      const ics=icsForEvents([{when:new Date("2025-01-02T18:00:00Z"), title:"A", channel:"B", tip:"C"}]);
+      console.assert(ics.includes("BEGIN:VCALENDAR") && ics.includes("END:VCALENDAR"), "ICS VCALENDAR block");
+
+      const days=enumerateDates("2025-01-01","2025-01-03"); console.assert(days.length===3, "Dates include both ends");
+    }
+
+    // ===== App =====
+    function App(){
+      const [url,setUrl]=React.useState("");
+      const [genre,setGenre]=React.useState("");
+      const [followers,setFollowers]=React.useState("");
+      const [notes,setNotes]=React.useState("");
+      const [winStart,setWinStart]=React.useState(()=> addDays(new Date(),7).toISOString().slice(0,10));
+      const [winEnd,setWinEnd]=React.useState(()=> addDays(new Date(),30).toISOString().slice(0,10));
+      const [loading,setLoading]=React.useState(false);
+      const [result,setResult]=React.useState(null);
+
+      React.useEffect(()=>{ runTests(); }, []);
+
+      const enabled=(url.trim().length>0 || genre.trim().length>0) && winStart && winEnd;
+
+      const handleGenerate=()=>{
+        setLoading(true);
+        try{
+          const fol=parseInt(followers||"0",10)||0;
+          const {dt,reason}=pickBestDateInWindow({genre, followers:fol, startDate:winStart, endDate:winEnd});
+          const plan=makePlan(dt, genre);
+          setResult({ recommended_date:dt, reason, best_days_to_post:["вторник","четвъртък"], plan });
+        } finally { setLoading(false); }
+      };
+
+      const csvText = React.useMemo(()=> result ? toCSV(result.plan) : "", [result]);
+
+      return (
+        <div className="container">
+          <h1>🎵 Smart Release Planner — MVP</h1>
+
+          <div className="card">
+            <div className="row">
+              <div>
+                <label htmlFor="url">Линк към песен (Spotify/YouTube/TikTok)</label>
+                <input id="url" placeholder="https://open.spotify.com/track/..." value={url} onChange={e=>setUrl(e.target.value)} />
+              </div>
+              <div>
+                <label htmlFor="genre">Жанр</label>
+                <input id="genre" placeholder="Pop / HipHop / EDM / Indie / RnB / Rock / Trap" value={genre} onChange={e=>setGenre(e.target.value)} />
+              </div>
+              <div>
+                <label htmlFor="wstart">Период: От</label>
+                <input type="date" id="wstart" value={winStart} onChange={e=>setWinStart(e.target.value)} />
+              </div>
+              <div>
+                <label htmlFor="wend">Период: До</label>
+                <input type="date" id="wend" value={winEnd} onChange={e=>setWinEnd(e.target.value)} />
+              </div>
+              <div>
+                <label htmlFor="followers">Последователи (по избор)</label>
+                <input id="followers" type="number" placeholder="напр. 2500" value={followers} onChange={e=>setFollowers(e.target.value)} />
+              </div>
+              <div>
+                <label htmlFor="notes">Забележки (по избор)</label>
+                <textarea id="notes" placeholder="Контекст: планиран сингъл, колаборация, mood, BPM..." value={notes} onChange={e=>setNotes(e.target.value)} />
+              </div>
+              <div style={{gridColumn:"1 / -1"}}>
+                <button disabled={!enabled || loading} onClick={handleGenerate}>{loading? "Генерира…" : "Генерирай план"}</button>
+              </div>
+            </div>
+          </div>
+
+          {result && (
+            <>
+              <div style="height:12px"></div>
+              <div className="card">
+                <div className="title">📅 Препоръчана дата за релийз</div>
+                <div style={{marginTop:6, fontSize:18, fontWeight:700}}>{fmtBG(result.recommended_date)}</div>
+                <div className="muted">Причина: {result.reason}</div>
+                <div className="muted" style={{marginTop:6}}>Ограничение на период: {winStart} → {winEnd} (изискване: ≥ 7 дни runway)</div>
+
+                <div className="row" style={{marginTop:14}}>
+                  <div>
+                    <div className="title" style={{marginBottom:6}}>Най-добри дни за постване</div>
+                    <ul>
+                      {result.best_days_to_post.map((d,i)=>(<li key={i}>{d}</li>))}
+                    </ul>
+                  </div>
+                  <div style={{display:"flex", gap:8, alignItems:"end"}}>
+                    <button className="secondary" onClick={()=>download("release_plan.csv", csvText)}>Експорт CSV</button>
+                    <button className="secondary" onClick={()=>download("release_plan.ics", icsForEvents(result.plan, "Smart Release Planner"))}>Експорт ICS</button>
+                  </div>
+                </div>
+              </div>
+
+              <div style="height:12px"></div>
+              <div className="grid">
+                {result.plan.map((ev,idx)=>(
+                  <div className="event" key={idx}>
+                    <div className="muted">{fmtBG(ev.when)}</div>
+                    <div className="title" style={{marginTop:6}}>{ev.title}</div>
+                    <div className="muted" style={{marginTop:4}}><b>Канал:</b> {ev.channel}</div>
+                    <div className="muted" style={{marginTop:2}}><b>Съвет:</b> {ev.tip}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div style="height:12px"></div>
+              <div className="card">
+                <div className="title">🧠 Промпт за OpenAI (Pro интеграция)</div>
+                <textarea readOnly style={{marginTop:8}}
+                  value={`You are an AI music marketing strategist. Analyze engagement around this song and return JSON with recommended release date (Europe/Sofia timezone), best days to post, and plans for pre-launch, launch-day, and post-launch.\n\nSong URL: ${url || "(add URL)"}\nGenre: ${genre || "(genre)"}\nFollowers: ${followers || "(0)"}\n\nConstraints:\n- Prefer Tue/Thu/Fri; avoid weekend where appropriate.\n- Ensure ~7 days pre-launch runway.\n- Chosen window: ${winStart} → ${winEnd}.\n- Provide rationale in one sentence.\n\nOutput JSON:\n{\n  "recommended_date": "YYYY-MM-DD HH:MM",\n  "best_days_to_post": ["Tuesday","Thursday"],\n  "pre_launch_plan": "...",\n  "launch_day_actions": "...",\n  "post_launch_plan": "...",\n  "rationale": "..." \n}`}
+                />
+              </div>
+            </>
+          )}
+
+          <p className="muted" style={{marginTop:10}}>MVP демо: локална евристика без външни API. За финал включи OpenAI + Spotify API през Make/Bubble.</p>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
 </html>
-
