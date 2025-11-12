@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Smart Release Planner — MVP</title>
 
-  <!-- React 18 UMD + Babel (за да работи JSX в един файл) -->
+  <!-- React 18 UMD + Babel (за JSX в един файл) -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
@@ -30,6 +30,7 @@
     .event { background:#0a0f1a; border:1px solid #334155; border-radius:14px; padding:12px; }
     .muted { color:#94a3b8; font-size:12px; }
     .title { font-weight:700; }
+    .spacer { height:12px; }
   </style>
 </head>
 <body>
@@ -139,11 +140,10 @@
       const csv=toCSV([{when:new Date("2025-01-02T18:00:00Z"), title:'He said "Hi"', channel:"X", tip:"Y"}]);
       console.assert(csv.includes("\n"), "CSV: newline");
       console.assert(csv.includes('\\"'), "CSV: quotes escaped");
-
       const ics=icsForEvents([{when:new Date("2025-01-02T18:00:00Z"), title:"A", channel:"B", tip:"C"}]);
       console.assert(ics.includes("BEGIN:VCALENDAR") && ics.includes("END:VCALENDAR"), "ICS VCALENDAR block");
-
-      const days=enumerateDates("2025-01-01","2025-01-03"); console.assert(days.length===3, "Dates include both ends");
+      const days=(function(a,b){const s=new Date(a),e=new Date(b);s.setHours(0,0,0,0);e.setHours(0,0,0,0);let c=0;for(let d=new Date(s);d<=e;d.setDate(d.getDate()+1))c++;return c;})("2025-01-01","2025-01-03");
+      console.assert(days===3,"Dates include both ends");
     }
 
     // ===== App =====
@@ -203,7 +203,7 @@
                 <label htmlFor="notes">Забележки (по избор)</label>
                 <textarea id="notes" placeholder="Контекст: планиран сингъл, колаборация, mood, BPM..." value={notes} onChange={e=>setNotes(e.target.value)} />
               </div>
-              <div style={{gridColumn:"1 / -1"}}>
+              <div style={{ gridColumn:"1 / -1" }}>
                 <button disabled={!enabled || loading} onClick={handleGenerate}>{loading? "Генерира…" : "Генерирай план"}</button>
               </div>
             </div>
@@ -211,50 +211,50 @@
 
           {result && (
             <>
-              <div style="height:12px"></div>
+              <div className="spacer"></div>
               <div className="card">
                 <div className="title">📅 Препоръчана дата за релийз</div>
-                <div style={{marginTop:6, fontSize:18, fontWeight:700}}>{fmtBG(result.recommended_date)}</div>
+                <div style={{ marginTop:6, fontSize:18, fontWeight:700 }}>{fmtBG(result.recommended_date)}</div>
                 <div className="muted">Причина: {result.reason}</div>
-                <div className="muted" style={{marginTop:6}}>Ограничение на период: {winStart} → {winEnd} (изискване: ≥ 7 дни runway)</div>
+                <div className="muted" style={{ marginTop:6 }}>Ограничение на период: {winStart} → {winEnd} (изискване: ≥ 7 дни runway)</div>
 
-                <div className="row" style={{marginTop:14}}>
+                <div className="row" style={{ marginTop:14 }}>
                   <div>
-                    <div className="title" style={{marginBottom:6}}>Най-добри дни за постване</div>
+                    <div className="title" style={{ marginBottom:6 }}>Най-добри дни за постване</div>
                     <ul>
                       {result.best_days_to_post.map((d,i)=>(<li key={i}>{d}</li>))}
                     </ul>
                   </div>
-                  <div style={{display:"flex", gap:8, alignItems:"end"}}>
+                  <div style={{ display:"flex", gap:8, alignItems:"end" }}>
                     <button className="secondary" onClick={()=>download("release_plan.csv", csvText)}>Експорт CSV</button>
                     <button className="secondary" onClick={()=>download("release_plan.ics", icsForEvents(result.plan, "Smart Release Planner"))}>Експорт ICS</button>
                   </div>
                 </div>
               </div>
 
-              <div style="height:12px"></div>
+              <div className="spacer"></div>
               <div className="grid">
                 {result.plan.map((ev,idx)=>(
                   <div className="event" key={idx}>
                     <div className="muted">{fmtBG(ev.when)}</div>
-                    <div className="title" style={{marginTop:6}}>{ev.title}</div>
-                    <div className="muted" style={{marginTop:4}}><b>Канал:</b> {ev.channel}</div>
-                    <div className="muted" style={{marginTop:2}}><b>Съвет:</b> {ev.tip}</div>
+                    <div className="title" style={{ marginTop:6 }}>{ev.title}</div>
+                    <div className="muted" style={{ marginTop:4 }}><b>Канал:</b> {ev.channel}</div>
+                    <div className="muted" style={{ marginTop:2 }}><b>Съвет:</b> {ev.tip}</div>
                   </div>
                 ))}
               </div>
 
-              <div style="height:12px"></div>
+              <div className="spacer"></div>
               <div className="card">
                 <div className="title">🧠 Промпт за OpenAI (Pro интеграция)</div>
-                <textarea readOnly style={{marginTop:8}}
+                <textarea readOnly style={{ marginTop:8 }}
                   value={`You are an AI music marketing strategist. Analyze engagement around this song and return JSON with recommended release date (Europe/Sofia timezone), best days to post, and plans for pre-launch, launch-day, and post-launch.\n\nSong URL: ${url || "(add URL)"}\nGenre: ${genre || "(genre)"}\nFollowers: ${followers || "(0)"}\n\nConstraints:\n- Prefer Tue/Thu/Fri; avoid weekend where appropriate.\n- Ensure ~7 days pre-launch runway.\n- Chosen window: ${winStart} → ${winEnd}.\n- Provide rationale in one sentence.\n\nOutput JSON:\n{\n  "recommended_date": "YYYY-MM-DD HH:MM",\n  "best_days_to_post": ["Tuesday","Thursday"],\n  "pre_launch_plan": "...",\n  "launch_day_actions": "...",\n  "post_launch_plan": "...",\n  "rationale": "..." \n}`}
                 />
               </div>
             </>
           )}
 
-          <p className="muted" style={{marginTop:10}}>MVP демо: локална евристика без външни API. За финал включи OpenAI + Spotify API през Make/Bubble.</p>
+          <p className="muted" style={{ marginTop:10 }}>MVP демо: локална евристика без външни API. За финал включи OpenAI + Spotify API през Make/Bubble.</p>
         </div>
       );
     }
@@ -263,3 +263,4 @@
   </script>
 </body>
 </html>
+
